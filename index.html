@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#020617">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <title>Astronomi &amp; Kystdata</title>
+
+  <!-- Biblioteker: SunCalc for sol/måne, Astronomy Engine for planetposisjoner -->
+  <script src="https://cdn.jsdelivr.net/npm/suncalc@1.9.0/suncalc.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/astronomy-engine@2.1.19/astronomy.browser.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #020617;
+      --panel: rgba(30, 41, 59, .76);
+      --border: rgba(148, 163, 184, .2);
+      --muted: #94a3b8;
+      --text: #f8fafc;
+      --cyan: #22d3ee;
+      --purple: #c084fc;
+      --amber: #fbbf24;
+      --green: #34d399;
+      --red: #fb7185;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; padding: 22px;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background: radial-gradient(circle at 50% 12%, #172554 0%, #0b1124 35%, var(--bg) 78%);
+    }
+    button, input, select { font: inherit; }
+    button, select, input { color: var(--text); }
+    button { cursor: pointer; }
+    .app { max-width: 1240px; margin: auto; display: grid; gap: 22px; }
+    .glass {
+      background: var(--panel); backdrop-filter: blur(12px);
+      border: 1px solid var(--border); border-radius: 20px;
+      box-shadow: 0 18px 45px rgba(0,0,0,.18);
+    }
+    .header { padding: 22px; display: flex; align-items: center; justify-content: space-between; gap: 22px; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { font-size: clamp(1.45rem, 3vw, 2rem); margin-bottom: 5px; }
+    h2 { font-size: 1.15rem; margin-bottom: 18px; }
+    .subtitle, .muted { color: var(--muted); }
+    .subtitle { margin-bottom: 0; font-size: .9rem; }
+    .controls { display: flex; flex-wrap: wrap; align-items: end; gap: 11px; }
+    .field { display: grid; gap: 6px; }
+    label { color: var(--muted); font-size: .75rem; font-weight: 650; }
+    input, select {
+      min-height: 42px; max-width: 100%; padding: 9px 11px;
+      border-radius: 11px; border: 1px solid #334155; background: #0f172a;
+    }
+    input:focus, select:focus, button:focus-visible, .planet-card:focus-visible {
+      outline: 2px solid var(--cyan); outline-offset: 2px;
+    }
+    .btn {
+      min-height: 42px; padding: 10px 15px; border: 0; border-radius: 11px;
+      font-weight: 700; background: #0891b2; color: white;
+    }
+    .btn:hover { background: #06b6d4; }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+    .panel { padding: 21px; min-width: 0; }
+    .amber { color: var(--amber); } .cyan { color: var(--cyan); } .purple { color: var(--purple); }
+    .rows { display: grid; gap: 0; }
+    .data-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 11px 0; border-bottom: 1px solid rgba(148,163,184,.15); font-size: .9rem; }
+    .data-row:last-child { border-bottom: 0; }
+    .data-row span:first-child { color: var(--muted); }
+    .data-row strong { text-align: right; font-variant-numeric: tabular-nums; }
+    .panel-foot { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); color: var(--muted); font-size: .78rem; }
+    .moon-wrap { text-align: center; margin: 8px 0 20px; }
+    .moon {
+      width: 112px; height: 112px; margin: 0 auto 12px; border-radius: 50%;
+      background: #070b16; box-shadow: 0 0 28px rgba(255,255,255,.1);
+      overflow: hidden;
+    }
+    .moon svg { width: 100%; height: 100%; display: block; }
+    .phase-name { font-weight: 750; margin-bottom: 4px; }
+    .notice { color: var(--muted); font-size: .82rem; line-height: 1.5; }
+    .status { padding: 10px 12px; border-radius: 10px; margin-bottom: 12px; font-size: .82rem; line-height: 1.45; }
+    .status.info { background: rgba(8,145,178,.12); border: 1px solid rgba(34,211,238,.2); color: #a5f3fc; }
+    .status.error { background: rgba(190,18,60,.13); border: 1px solid rgba(251,113,133,.3); color: #fecdd3; }
+    .tide-list { display: grid; gap: 9px; }
+    .tide-item { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 12px; border-radius: 12px; background: rgba(15,23,42,.72); }
+    .tide-kind { display: flex; align-items: center; gap: 9px; font-weight: 650; }
+    .tide-kind.high i { color: var(--cyan); } .tide-kind.low i { color: #60a5fa; }
+    .tide-value { text-align: right; font-size: .88rem; }
+    .tide-value small { display: block; color: var(--muted); }
+    .planetarium { padding: 22px; }
+    .planet-grid { display: grid; grid-template-columns: repeat(8, minmax(0,1fr)); gap: 12px; }
+    .planet-card {
+      text-align: center; border: 1px solid var(--border); border-radius: 14px;
+      background: rgba(15,23,42,.58); padding: 15px 9px; min-width: 0;
+      transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+    }
+    .planet-card:hover { transform: translateY(-3px); border-color: rgba(192,132,252,.65); box-shadow: 0 10px 25px rgba(168,85,247,.12); }
+    .planet-card i { color: var(--purple); font-size: 1.5rem; margin-bottom: 9px; }
+    .planet-card h3 { font-size: .9rem; margin-bottom: 12px; }
+    .planet-card .position { font-size: .76rem; line-height: 1.6; color: #cbd5e1; }
+    .pill { display: inline-block; border-radius: 999px; padding: 4px 7px; margin-top: 9px; font-size: .67rem; line-height: 1.3; }
+    .pill.up { color: #a7f3d0; background: rgba(6,95,70,.45); }
+    .pill.down { color: #cbd5e1; background: rgba(51,65,85,.6); }
+    .pill.day { color: #fde68a; background: rgba(146,64,14,.35); }
+    .modal { position: fixed; inset: 0; z-index: 10; display: none; align-items: center; justify-content: center; padding: 18px; background: rgba(0,0,0,.76); }
+    .modal.open { display: flex; }
+    .modal-card { width: min(520px, 100%); padding: 24px; position: relative; }
+    .close { position: absolute; right: 16px; top: 14px; border: 0; background: transparent; color: var(--muted); font-size: 1.4rem; }
+    .modal-title { display: flex; gap: 13px; align-items: center; padding-right: 28px; }
+    .modal-title i { color: var(--purple); font-size: 1.8rem; }
+    .modal-title h2 { margin-bottom: 4px; }
+    .guide { background: rgba(88,28,135,.18); border: 1px solid rgba(192,132,252,.18); border-radius: 12px; padding: 14px; line-height: 1.6; font-size: .87rem; }
+    .footer { text-align: center; color: #64748b; font-size: .75rem; line-height: 1.6; padding: 0 8px 8px; }
+    .footer a { color: #67e8f9; }
+    @media (max-width: 1050px) { .planet-grid { grid-template-columns: repeat(4,minmax(0,1fr)); } .grid { grid-template-columns: repeat(2,minmax(0,1fr)); } .header { align-items: flex-start; flex-direction: column; } }
+    @media (max-width: 650px) {
+      body { padding: 12px; } .grid { grid-template-columns: 1fr; } .planet-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+      .header, .panel, .planetarium { padding: 17px; } .controls { width: 100%; align-items: stretch; }
+      .field { flex: 1 1 135px; } .field select, .field input { width: 100%; } .controls .btn { flex: 1 1 100%; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; } }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="glass header">
+      <div>
+        <h1><i class="fa-solid fa-earth-europe cyan"></i> Astronomi- &amp; Kystoversikt</h1>
+        <p class="subtitle">Sol, måne, planetposisjoner og tidevann for valgt sted og tidspunkt.</p>
+      </div>
+      <div class="controls">
+        <div class="field">
+          <label for="locationSelect">Sted</label>
+          <select id="locationSelect">
+            <option value="kristiansand" data-lat="58.1599" data-lon="8.0182">Kristiansand</option>
+            <option value="oslo" data-lat="59.9139" data-lon="10.7522">Oslo</option>
+            <option value="bergen" data-lat="60.3913" data-lon="5.3221">Bergen</option>
+            <option value="trondheim" data-lat="63.4305" data-lon="10.3951">Trondheim</option>
+            <option value="tromso" data-lat="69.6492" data-lon="18.9553">Tromsø</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="datePicker">Dato</label>
+          <input type="date" id="datePicker">
+        </div>
+        <div class="field">
+          <label for="timePicker">Klokkeslett</label>
+          <input type="time" id="timePicker">
+        </div>
+        <button id="todayBtn" class="btn"><i class="fa-solid fa-clock"></i> Nå / I dag</button>
+      </div>
+    </header>
+
+    <section class="grid" aria-label="Sol, måne og tidevann">
+      <article class="glass panel">
+        <h2 class="amber"><i class="fa-solid fa-sun"></i> Solen</h2>
+        <div class="rows">
+          <div class="data-row"><span>Soloppgang</span><strong id="sunriseTime">Beregner …</strong></div>
+          <div class="data-row"><span>Solens høyeste punkt</span><strong id="solarNoonTime">Beregner …</strong></div>
+          <div class="data-row"><span>Solnedgang</span><strong id="sunsetTime">Beregner …</strong></div>
+          <div class="data-row"><span>Dagslys</span><strong id="dayLength">Beregner …</strong></div>
+        </div>
+        <div class="panel-foot">Solhøyde og kompassretning kl. 12:00</div>
+        <div id="sunPosition" class="notice">Beregner …</div>
+      </article>
+
+      <article class="glass panel">
+        <h2><i class="fa-solid fa-moon"></i> Månen &amp; faser</h2>
+        <div class="moon-wrap">
+          <div class="moon" id="moonVisualContainer" aria-label="Illustrasjon av månefasen">
+            <svg viewBox="0 0 100 100" role="img" aria-hidden="true">
+              <defs><radialGradient id="moonTexture" cx="35%" cy="30%" r="75%">
+                <stop offset="0%" stop-color="#fffde7"/><stop offset="65%" stop-color="#dbeafe"/><stop offset="100%" stop-color="#64748b"/>
+              </radialGradient></defs>
+              <circle cx="50" cy="50" r="48" fill="#070b16"/>
+              <circle cx="50" cy="50" r="48" fill="url(#moonTexture)" id="moonLit"/>
+              <path id="moonShadowPath" fill="#070b16"></path>
+            </svg>
+          </div>
+          <div id="moonPhaseName" class="phase-name">Beregner …</div>
+          <div id="moonIllumination" class="notice">Belysning: …</div>
+        </div>
+        <div class="rows">
+          <div class="data-row"><span>Måneoppgang</span><strong id="moonriseTime">Beregner …</strong></div>
+          <div class="data-row"><span>Månenedgang</span><strong id="moonsetTime">Beregner …</strong></div>
+          <div class="data-row"><span>Månehøyde nå</span><strong id="moonAltitude">Beregner …</strong></div>
+        </div>
+      </article>
+
+      <article class="glass panel">
+        <h2 class="cyan"><i class="fa-solid fa-water"></i> Flo og fjære</h2>
+        <div id="tideStatus" class="status info">Henter tidevannsdata fra Kartverket …</div>
+        <div id="tideContainer" class="tide-list"></div>
+        <div class="panel-foot">Vannstand oppgis i cm relativt til sjøkartnull (CD), slik Kartverket leverer dataene.</div>
+        <p class="notice" style="margin:12px 0 0">Vær og vind kan påvirke faktisk vannstand. Sjekk Kartverkets varsel ved planlegging nær sjøen.</p>
+      </article>
+    </section>
+
+    <section class="glass planetarium">
+      <h2 class="purple"><i class="fa-solid fa-orbit"></i> De sju planetene og månen</h2>
+      <p class="notice" style="margin-bottom:18px">Trykk på et kort for kompassretning, høyde og observasjonsråd. Posisjonene beregnes for det valgte tidspunktet.</p>
+      <div id="planetsGrid" class="planet-grid"></div>
+    </section>
+
+    <footer class="footer">
+      Astronomiske beregninger utføres i nettleseren med SunCalc og Astronomy Engine.
+      Tidevannsdata leveres av <a href="https://www.kartverket.no/til-sjos/se-havniva" target="_blank" rel="noopener noreferrer">Kartverket – Se havnivå</a> (CC BY 4.0).
+      <br>Data krever internettforbindelse. Hvis en tjeneste ikke svarer, vises en feilmelding i stedet for oppdiktede verdier.
+    </footer>
+  </main>
+
+  <div id="planetModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="glass modal-card">
+      <button id="closeModal" class="close" aria-label="Lukk vindu"><i class="fa-solid fa-xmark"></i></button>
+      <div class="modal-title">
+        <i id="modalIcon" class="fa-solid fa-star"></i>
+        <div><h2 id="modalTitle">Objekt</h2><div class="notice">Observasjonsguide</div></div>
+      </div>
+      <div class="rows" style="margin:18px 0">
+        <div class="data-row"><span>Kompassretning (asimut)</span><strong id="modalAzimuth">–</strong></div>
+        <div class="data-row"><span>Høyde over horisonten</span><strong id="modalAltitude">–</strong></div>
+        <div class="data-row"><span>Observasjonsforhold</span><strong id="modalVisibility">–</strong></div>
+      </div>
+      <div id="modalGuideText" class="guide"></div>
+      <div style="text-align:right;margin-top:18px"><button id="closeModalBtn" class="btn">Lukk</button></div>
+    </div>
+  </div>
+
+  <script>
+    "use strict";
+
+    const $ = (id) => document.getElementById(id);
+    const datePicker = $("datePicker");
+    const timePicker = $("timePicker");
+    const locationSelect = $("locationSelect");
+    const planetModal = $("planetModal");
+    let tideRequestController = null;
+    let tideRequestTimer = null;
+    let latestBodies = [];
+
+    const BODY_LIST = [
+      { name: "Månen", body: "Moon", icon: "fa-moon", description: "Jordens naturlige satellitt. Kikkerter viser kratere og skygger langs grensen mellom lys og mørke." },
+      { name: "Merkur", body: "Mercury", icon: "fa-circle", description: "Merkur står alltid relativt nær solen på himmelen. Se etter den lavt i skumringen – aldri sveip med kikkert nær solen." },
+      { name: "Venus", body: "Venus", icon: "fa-star", description: "Venus er ofte svært lyssterk. En kikkert kan vise fasen, men ikke detaljer i overflaten." },
+      { name: "Mars", body: "Mars", icon: "fa-circle", description: "Mars kan se rødlig ut. Hvor mye detaljer du ser, avhenger av avstanden til jorden og teleskopet." },
+      { name: "Jupiter", body: "Jupiter", icon: "fa-circle-half-stroke", description: "Jupiters fire største måner kan ofte ses som små lyspunkter på rekke med en liten kikkert." },
+      { name: "Saturn", body: "Saturn", icon: "fa-ring", description: "Et teleskop med stabil montering og moderat forstørrelse kan vise Saturns ringer når de er godt plassert." },
+      { name: "Uranus", body: "Uranus", icon: "fa-globe", description: "Uranus er svak og ser vanligvis ut som et lite punkt. Bruk stjernekart og mørk himmel." },
+      { name: "Neptun", body: "Neptune", icon: "fa-water", description: "Neptun er svært svak. Et godt stjernekart, teleskop og mørk himmel er nødvendig." }
+    ];
+
+    function pad(n) { return String(n).padStart(2, "0"); }
+    function dateString(d) { return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+    function timeString(d) { return `${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+    function formatTime(d) {
+      if (!(d instanceof Date) || !Number.isFinite(d.getTime())) return "Ikke denne dagen";
+      return new Intl.DateTimeFormat("nb-NO", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Oslo" }).format(d);
+    }
+    function selectedDate() {
+      if (!datePicker.value || !timePicker.value) throw new Error("Velg både dato og klokkeslett.");
+      const [y,m,d] = datePicker.value.split("-").map(Number);
+      const [h,min] = timePicker.value.split(":").map(Number);
+      return new Date(y, m - 1, d, h, min, 0, 0);
+    }
+    function getLocation() {
+      const option = locationSelect.options[locationSelect.selectedIndex];
+      return { name: option.textContent, key: locationSelect.value, lat: Number(option.dataset.lat), lon: Number(option.dataset.lon) };
+    }
+    function formatDuration(ms) {
+      const mins = Math.max(0, Math.round(ms / 60000));
+      return `${Math.floor(mins/60)} t ${mins%60} min`;
+    }
+    function compass(degrees) {
+      const names = ["Nord", "Nordøst", "Øst", "Sørøst", "Sør", "Sørvest", "Vest", "Nordvest"];
+      return `${names[Math.round(((degrees % 360) + 360) % 360 / 45) % 8]} (${Math.round(degrees)}°)`;
+    }
+    function safeText(el, value) { el.textContent = value; }
+
+    function updateSunMoon(date, location) {
+      const times = SunCalc.getTimes(date, location.lat, location.lon);
+      const validRise = times.sunrise instanceof Date && Number.isFinite(times.sunrise.getTime());
+      const validSet = times.sunset instanceof Date && Number.isFinite(times.sunset.getTime());
+      safeText($("sunriseTime"), validRise ? formatTime(times.sunrise) : "Ingen soloppgang");
+      safeText($("solarNoonTime"), times.solarNoon ? formatTime(times.solarNoon) : "Ikke tilgjengelig");
+      safeText($("sunsetTime"), validSet ? formatTime(times.sunset) : "Ingen solnedgang");
+      safeText($("dayLength"), validRise && validSet ? formatDuration(times.sunset - times.sunrise) : "Polardag / mørketid");
+
+      const noon = new Date(date);
+      noon.setHours(12, 0, 0, 0);
+      const sunPosition = SunCalc.getPosition(noon, location.lat, location.lon);
+      const sunAlt = sunPosition.altitude * 180 / Math.PI;
+      const sunAz = (sunPosition.azimuth * 180 / Math.PI + 180 + 360) % 360;
+      safeText($("sunPosition"), `Høyde ${sunAlt.toFixed(1)}° · ${compass(sunAz)}`);
+
+      const moonTimes = SunCalc.getMoonTimes(date, location.lat, location.lon);
+      safeText($("moonriseTime"), moonTimes.rise ? formatTime(moonTimes.rise) : "Ingen oppgang funnet");
+      safeText($("moonsetTime"), moonTimes.set ? formatTime(moonTimes.set) : "Ingen nedgang funnet");
+      const illumination = SunCalc.getMoonIllumination(date);
+      safeText($("moonIllumination"), `Belyst ${Math.round(illumination.fraction * 100)} %`);
+      safeText($("moonPhaseName"), phaseName(illumination.phase));
+      drawMoon(illumination.phase, illumination.fraction);
+    }
+
+    function phaseName(phase) {
+      if (phase < .03 || phase > .97) return "Nymåne";
+      if (phase < .22) return "Voksende sigd";
+      if (phase < .28) return "Første kvarter";
+      if (phase < .47) return "Voksende måne";
+      if (phase < .53) return "Fullmåne";
+      if (phase < .72) return "Avtakende måne";
+      if (phase < .78) return "Siste kvarter";
+      return "Avtakende sigd";
+    }
+
+    function drawMoon(phase, fraction) {
+      const path = $("moonShadowPath");
+      const r = 48, cx = 50, cy = 50;
+      // SunCalc phase: 0=new, .25=first quarter, .5=full, .75=last quarter.
+      // Skyggepolygonen følger fasevinkelen; høyre side er belyst ved voksende måne.
+      const waxing = phase < .5;
+      const terminator = Math.abs(1 - 2 * fraction) * r;
+      let d;
+      if (fraction < .015) {
+        d = `M ${cx} ${cy-r} A ${r} ${r} 0 1 0 ${cx} ${cy+r} A ${r} ${r} 0 1 0 ${cx} ${cy-r} Z`;
+      } else if (fraction > .985) {
+        d = "";
+      } else {
+        const sweep = waxing ? 1 : 0;
+        const innerSweep = (waxing ? fraction < .5 : fraction >= .5) ? 1 : 0;
+        d = `M ${cx} ${cy-r} A ${r} ${r} 0 0 ${sweep} ${cx} ${cy+r} A ${terminator} ${r} 0 0 ${innerSweep} ${cx} ${cy-r} Z`;
+      }
+      path.setAttribute("d", d);
+      // Flip the illuminated disk for a simple Northern Hemisphere illustration.
+      $("moonLit").setAttribute("opacity", fraction < .015 ? "0.95" : "1");
+    }
+
+    function astronomyPosition(bodyName, date, location) {
+      if (!window.Astronomy) throw new Error("Astronomy Engine ble ikke lastet. Kontroller internettforbindelsen.");
+      const body = Astronomy.Body[bodyName];
+      const observer = new Astronomy.Observer(location.lat, location.lon, 0);
+      const eq = Astronomy.Equator(body, date, observer, true, true);
+      const hor = Astronomy.Horizon(date, observer, eq.ra, eq.dec, "normal");
+      return { altitude: hor.altitude, azimuth: ((hor.azimuth % 360) + 360) % 360 };
+    }
+
+    function isDarkEnough(date, location) {
+      const sun = astronomyPosition("Sun", date, location);
+      return sun.altitude < -6;
+    }
+
+    function updatePlanets(date, location) {
+      const grid = $("planetsGrid");
+      grid.replaceChildren();
+      latestBodies = [];
+
+      const dark = isDarkEnough(date, location);
+      for (const item of BODY_LIST) {
+        let pos;
+        try { pos = astronomyPosition(item.body, date, location); }
+        catch (error) {
+          grid.innerHTML = `<div class="status error">Kunne ikke beregne planetposisjonene: ${escapeHtml(error.message)}</div>`;
+          return;
+        }
+        const above = pos.altitude > 0;
+        const visible = above && (item.body === "Moon" || dark);
+        const stateText = !above ? "Under horisonten" : (visible ? "Mulig å observere" : "Himmelen er for lys");
+        const bodyInfo = { ...item, ...pos, above, visible, dark };
+        latestBodies.push(bodyInfo);
+
+        const card = document.createElement("button");
+        card.type = "button";
+        card.className = "planet-card";
+        card.setAttribute("aria-label", `Vis observasjonsguide for ${item.name}`);
+        card.innerHTML = `
+          <i class="fa-solid ${item.icon}" aria-hidden="true"></i>
+          <h3>${item.name}</h3>
+          <div class="position">Høyde: <strong>${pos.altitude.toFixed(1)}°</strong><br>Asimut: <strong>${Math.round(pos.azimuth)}°</strong></div>
+          <span class="pill ${!above ? "down" : visible ? "up" : "day"}">${stateText}</span>`;
+        card.addEventListener("click", () => openPlanetModal(bodyInfo, date));
+        grid.appendChild(card);
+      }
+      const moon = latestBodies.find(b => b.body === "Moon");
+      if (moon) safeText($("moonAltitude"), `${moon.altitude.toFixed(1)}°`);
+    }
+
+    function openPlanetModal(item, date) {
+      $("modalIcon").className = `fa-solid ${item.icon}`;
+      safeText($("modalTitle"), item.name);
+      safeText($("modalAzimuth"), compass(item.azimuth));
+      safeText($("modalAltitude"), `${item.altitude.toFixed(1)}°`);
+      safeText($("modalVisibility"), !item.above ? "Under horisonten" : item.visible ? "Mulig å observere" : "Over horisonten, men dagslyset gjør observasjon vanskelig");
+      let guide = item.description + " ";
+      if (!item.above) {
+        guide += "Objektet er under horisonten på valgt tidspunkt. Prøv et annet klokkeslett.";
+      } else {
+        guide += `Pek mot ${compass(item.azimuth)} og start med å sikte omtrent ${Math.max(0, item.altitude).toFixed(0)}° over horisonten.`;
+        if (!item.dark && item.body !== "Moon") guide += " Det er for lyst på himmelen nå; prøv etter astronomisk skumring.";
+        if (item.body === "Mercury" || item.body === "Venus") guide += " Vær svært forsiktig med sollys: bruk aldri kikkert eller teleskop nær solen.";
+      }
+      safeText($("modalGuideText"), guide);
+      planetModal.classList.add("open");
+      $("closeModal").focus();
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+    }
+
+    async function updateTides(date, location) {
+      const status = $("tideStatus");
+      const container = $("tideContainer");
+      if (tideRequestController) tideRequestController.abort();
+      tideRequestController = new AbortController();
+      container.replaceChildren();
+      status.className = "status info";
+      status.textContent = "Henter flo- og fjæretider fra Kartverket …";
+
+      // Hent og vis bare hendelsene på den valgte kalenderdagen.
+      const start = new Date(date); start.setHours(0, 0, 0, 0);
+      const end = new Date(start); end.setDate(end.getDate() + 1);
+      const params = new URLSearchParams({
+        tide_request: "locationdata",
+        lat: String(location.lat),
+        lon: String(location.lon),
+        fromtime: `${dateString(start)}T00:00`,
+        totime: `${dateString(end)}T00:00`,
+        datatype: "tab",
+        refcode: "cd",
+        lang: "nb",
+        file: "",
+        tzone: "1",
+        dst: "1"
+      });
+      const url = `https://vannstand.kartverket.no/tideapi.php?${params.toString()}`;
+
+      try {
+        const response = await fetch(url, { signal: tideRequestController.signal, headers: { "Accept": "application/xml,text/xml" } });
+        if (!response.ok) throw new Error(`Kartverket svarte med HTTP ${response.status}.`);
+        const xmlText = await response.text();
+        const xml = new DOMParser().parseFromString(xmlText, "application/xml");
+        if (xml.querySelector("parsererror")) throw new Error("Svaret fra Kartverket kunne ikke leses.");
+        const apiError = xml.querySelector("error");
+        if (apiError) throw new Error(apiError.textContent || "Kartverket returnerte en feil.");
+
+        const root = xml.querySelector("locationdata");
+        if (!root) {
+          const noData = xml.querySelector("nodata");
+          throw new Error(noData?.textContent || "Kartverket returnerte ingen tidevannsdata for dette stedet.");
+        }
+        const events = [];
+        // Kartverket returnerer tidevannshendelser som <waterlevel ... flag="high|low">.
+        // file skal være tomt (eller xml); en del API-oppsett svarer "Unknown file type" på file=xml.
+        root.querySelectorAll("waterlevel[time]").forEach(node => {
+          const timeValue = node.getAttribute("time");
+          const rawValue = node.getAttribute("value");
+          const flag = (node.getAttribute("flag") || "").toLowerCase();
+          if (!timeValue || !["high", "low"].includes(flag)) return;
+          const when = new Date(timeValue);
+          if (!Number.isFinite(when.getTime())) return;
+          events.push({
+            when,
+            high: flag === "high",
+            value: rawValue !== null && Number.isFinite(Number(rawValue)) ? Number(rawValue) : null
+          });
+        });
+
+        const unique = [...new Map(events.map(e => [`${e.when.toISOString()}-${e.high}`, e])).values()]
+          .sort((a,b) => a.when - b.when)
+          .filter(e => e.when >= start && e.when < end);
+
+        if (!unique.length) {
+          status.className = "status error";
+          status.textContent = "Kartverket svarte, men tidevannshendelsene hadde et annet format enn nettsiden forventet. Bruk lenken under for å se dataene direkte.";
+          addKartverketLink(container, url);
+          return;
+        }
+
+        status.className = "status info";
+        status.textContent = `Flo og fjære for ${location.name} – ${new Intl.DateTimeFormat("nb-NO", { day: "numeric", month: "long", year: "numeric" }).format(start)}. Tidene vises i norsk lokal tid.`;
+        for (const event of unique) {
+          const row = document.createElement("div");
+          row.className = "tide-item";
+          const kind = document.createElement("div");
+          kind.className = `tide-kind ${event.high ? "high" : "low"}`;
+          kind.innerHTML = `<i class="fa-solid ${event.high ? "fa-arrow-up" : "fa-arrow-down"}" aria-hidden="true"></i>`;
+          const label = document.createElement("span");
+          label.textContent = event.high ? "Flo" : "Fjære";
+          kind.appendChild(label);
+          const value = document.createElement("div");
+          value.className = "tide-value";
+          const time = document.createElement("strong");
+          time.textContent = formatTime(event.when);
+          value.appendChild(time);
+          if (event.value !== null) {
+            const small = document.createElement("small");
+            small.textContent = `${Math.round(event.value)} cm over sjøkartnull`;
+            value.appendChild(small);
+          }
+          row.append(kind, value);
+          container.appendChild(row);
+        }
+        addKartverketLink(container, url);
+      } catch (error) {
+        if (error.name === "AbortError") return;
+        status.className = "status error";
+        status.textContent = `Kunne ikke hente tidevannsdata: ${error.message} Sjekk internettforbindelsen eller åpne Kartverket direkte.`;
+        addKartverketLink(container, url);
+      }
+    }
+
+    function addKartverketLink(container, url) {
+      const link = document.createElement("a");
+      link.href = url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = "Åpne tidevannsdata hos Kartverket";
+      link.style.cssText = "display:block;color:#67e8f9;font-size:.82rem;margin-top:8px;overflow-wrap:anywhere";
+      container.appendChild(link);
+    }
+
+    function updateAll() {
+      let date;
+      try { date = selectedDate(); }
+      catch (error) {
+        $("tideStatus").className = "status error";
+        $("tideStatus").textContent = error.message;
+        return;
+      }
+      const location = getLocation();
+      try {
+        updateSunMoon(date, location);
+        updatePlanets(date, location);
+      } catch (error) {
+        console.error(error);
+        $("sunPosition").textContent = `Beregning feilet: ${error.message}`;
+      }
+      // Avoid duplicate API requests while the user is changing date/time quickly.
+      clearTimeout(tideRequestTimer);
+      tideRequestTimer = setTimeout(() => updateTides(date, location), 250);
+    }
+
+    function setNow() {
+      const now = new Date();
+      datePicker.value = dateString(now);
+      timePicker.value = timeString(now);
+      updateAll();
+    }
+
+    $("todayBtn").addEventListener("click", setNow);
+    datePicker.addEventListener("change", updateAll);
+    timePicker.addEventListener("change", updateAll);
+    locationSelect.addEventListener("change", updateAll);
+
+    function closePlanetModal() {
+      planetModal.classList.remove("open");
+    }
+    $("closeModal").addEventListener("click", closePlanetModal);
+    $("closeModalBtn").addEventListener("click", closePlanetModal);
+    planetModal.addEventListener("click", event => { if (event.target === planetModal) closePlanetModal(); });
+    document.addEventListener("keydown", event => { if (event.key === "Escape") closePlanetModal(); });
+
+    setNow();
+
+    // PWA: cache appskallet for raskere oppstart og en enkel offline-fallback.
+    // Eksterne biblioteker og Kartverkets live-data krever fortsatt internett.
+    if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./service-worker.js").catch(err => {
+          console.warn("Service worker kunne ikke registreres:", err);
+        });
+      });
+    }
+  </script>
+</body>
+</html>

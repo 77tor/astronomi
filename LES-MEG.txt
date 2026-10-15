@@ -1,0 +1,22 @@
+ASTRONOMI & KYSTDATA – PWA-pakke
+
+FILER
+- index.html: nettsiden
+- manifest.webmanifest: appnavn, ikon og fullskjermvisning
+- service-worker.js: mellomlagrer appskallet for raskere oppstart
+- icons/: appikoner i 192 og 512 piksler
+
+VIKTIG
+Denne mappen må publiseres på en HTTPS-nettadresse. Åpning direkte som file:// på telefonen er ikke nok til å installere som PWA.
+Astronomibibliotekene lastes fra CDN, og tidevann hentes fra Kartverket. Disse funksjonene trenger internett. Service worker-en lover derfor ikke full offline-funksjon.
+
+ENKEL PUBLISERING MED GITHUB PAGES
+1. Opprett/logg inn på GitHub.
+2. Opprett et nytt repository, for eksempel astronomi-kystdata.
+3. Last opp alle filene og mappen i denne pakken (ikke bare index.html).
+4. I repository: Settings -> Pages.
+5. Under Build and deployment velger du Deploy from a branch, branch main og folder /(root), og lagrer.
+6. Vent til GitHub Pages viser nettadressen. Åpne den på Android i Chrome.
+7. Chrome-menyen (⋮) -> Installer app / Legg til på startskjermen.
+
+Hvis GitHub tilbyr en adresse som slutter på github.io, brukes den som appens HTTPS-adresse.
