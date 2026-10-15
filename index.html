@@ -316,27 +316,40 @@
       return "Avtakende sigd";
     }
 
-    function drawMoon(phase, fraction) {
-      const path = $("moonShadowPath");
-      const r = 48, cx = 50, cy = 50;
-      // SunCalc phase: 0=new, .25=first quarter, .5=full, .75=last quarter.
-      // Skyggepolygonen følger fasevinkelen; høyre side er belyst ved voksende måne.
-      const waxing = phase < .5;
-      const terminator = Math.abs(1 - 2 * fraction) * r;
-      let d;
-      if (fraction < .015) {
-        d = `M ${cx} ${cy-r} A ${r} ${r} 0 1 0 ${cx} ${cy+r} A ${r} ${r} 0 1 0 ${cx} ${cy-r} Z`;
-      } else if (fraction > .985) {
-        d = "";
-      } else {
-        const sweep = waxing ? 1 : 0;
-        const innerSweep = (waxing ? fraction < .5 : fraction >= .5) ? 1 : 0;
-        d = `M ${cx} ${cy-r} A ${r} ${r} 0 0 ${sweep} ${cx} ${cy+r} A ${terminator} ${r} 0 0 ${innerSweep} ${cx} ${cy-r} Z`;
-      }
-      path.setAttribute("d", d);
-      // Flip the illuminated disk for a simple Northern Hemisphere illustration.
-      $("moonLit").setAttribute("opacity", fraction < .015 ? "0.95" : "1");
-    }
+function drawMoon(phase, fraction) {
+  const path = $("moonShadowPath");
+  const r = 48, cx = 50, cy = 50;
+
+  // Nymåne: Skyggen dekker 100 %
+  if (fraction < 0.015) {
+    path.setAttribute("d", `M ${cx} ${cy-r} A ${r} ${r} 0 1 0 ${cx} ${cy+r} A ${r} ${r} 0 1 0 ${cx} ${cy-r} Z`);
+    return;
+  }
+
+  // Fullmåne: Skyggen dekker 0 %
+  if (fraction > 0.985) {
+    path.setAttribute("d", "");
+    return;
+  }
+
+  const waxing = phase < 0.5;
+
+  // Radius for terminatorkurven (ellipsen)
+  const x = Math.cos(fraction * Math.PI) * r;
+  const rx = Math.abs(x);
+
+  // Ytre sirkelbue: For voksende måne skal skyggen dekke venstresiden
+  const outerSweep = waxing ? 0 : 1; 
+
+  // Indre terminatorkurve: Snudd sweep-retning for å dekke den mørke delen
+  const innerSweep = fraction < 0.5 ? (waxing ? 0 : 1) : (waxing ? 1 : 0);
+
+  const d = `M ${cx} ${cy-r} ` +
+            `A ${r} ${r} 0 0 ${outerSweep} ${cx} ${cy+r} ` +
+            `A ${rx} ${r} 0 0 ${innerSweep} ${cx} ${cy-r} Z`;
+
+  path.setAttribute("d", d);
+}
 
     function astronomyPosition(bodyName, date, location) {
       if (!window.Astronomy) throw new Error("Astronomy Engine ble ikke lastet. Kontroller internettforbindelsen.");
